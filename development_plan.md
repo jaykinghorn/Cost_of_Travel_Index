@@ -56,6 +56,11 @@ This development plan outlines the implementation strategy for building the Cost
   - `min_attraction_transactions` (int): Default 20
   - `min_retail_transactions` (int): Default 20
 
+- **MCC Code Categories** (configurable to allow category refinement):
+  - `mcc_restaurants` (list): [5812] - Full-service restaurants
+  - `mcc_attractions` (list): [7996, 7995, 7998, 7991] - Amusement parks, aquariums, recreation services
+  - `mcc_retail` (list): ["5971", "5977", "7230", "5942", "5994", "5611", "5621", "5631", "5641", "5651", "5681", "5691", "5699", "5311", "5992", "5993", "5309", "5310", "5931", "5943", "5947", "5950", "5995", "5999", "5944", "5948", "5661", "5655", "5832", "5932", "5937", "5940", "5941", "5945", "5946", "5949", "5970", "5972"] - Various retail categories including art supplies, cosmetics, beauty supplies, books, sporting goods, apparel, department stores, gift shops, jewelry, and specialty retail
+
 - **Data Source Configuration**:
   - `spend_dataset`: "prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment"
   - `geo_dataset`: "data-reference.Geo_Reference"
@@ -114,9 +119,9 @@ ORDER BY admin2_id
 - Filter by physical merchant locations (merch_type = 0)
 - Join to admin_geo_reference on merch_city to get county FIPS
 - Classify transactions by MCC codes:
-  - **Restaurants**: MCC codes TBD (need standard food service codes)
-  - **Attractions**: MCC codes TBD (museums, parks, entertainment, etc.)
-  - **Retail**: MCC codes TBD (shops, stores, etc.)
+  - **Restaurants**: MCC 5812 (full-service restaurants)
+  - **Attractions**: MCCs 7996, 7995, 7998, 7991 (amusement parks, aquariums, recreation services)
+  - **Retail**: 38 retail MCCs covering art supplies, cosmetics, books, sporting goods, apparel, jewelry, gift shops, department stores, and specialty retail
 - Select: county_fips, category, trans_amount, trans_date, txid
 
 **SQL Structure**:
@@ -124,9 +129,13 @@ ORDER BY admin2_id
 SELECT
   geo.admin2_id as county_fips,
   CASE
-    WHEN m.mcc IN (...) THEN 'restaurant'
-    WHEN m.mcc IN (...) THEN 'attraction'
-    WHEN m.mcc IN (...) THEN 'retail'
+    WHEN m.mcc = '5812' THEN 'restaurant'
+    WHEN m.mcc IN ('7996', '7995', '7998', '7991') THEN 'attraction'
+    WHEN m.mcc IN ('5971', '5977', '7230', '5942', '5994', '5611', '5621', '5631',
+                   '5641', '5651', '5681', '5691', '5699', '5311', '5992', '5993',
+                   '5309', '5310', '5931', '5943', '5947', '5950', '5995', '5999',
+                   '5944', '5948', '5661', '5655', '5832', '5932', '5937', '5940',
+                   '5941', '5945', '5946', '5949', '5970', '5972') THEN 'retail'
     ELSE 'other'
   END as category,
   t.trans_amount,
@@ -141,7 +150,13 @@ WHERE t.trans_date BETWEEN @month_start AND @month_end
   AND t.trans_distance > 60
   AND m.merch_type = 0
   AND geo.country = 'United States'
-  AND m.mcc IN (...)  -- All relevant MCCs
+  AND (m.mcc = '5812'
+    OR m.mcc IN ('7996', '7995', '7998', '7991')
+    OR m.mcc IN ('5971', '5977', '7230', '5942', '5994', '5611', '5621', '5631',
+                 '5641', '5651', '5681', '5691', '5699', '5311', '5992', '5993',
+                 '5309', '5310', '5931', '5943', '5947', '5950', '5995', '5999',
+                 '5944', '5948', '5661', '5655', '5832', '5932', '5937', '5940',
+                 '5941', '5945', '5946', '5949', '5970', '5972'))
 ```
 
 **Query Optimization**:
@@ -729,25 +744,75 @@ To complete implementation, the following information is required:
    - Property ID field name
    - Date field name(s)
 
-2. **MCC Code Lists**:
-   - Definitive list of restaurant MCC codes
-   - Definitive list of attraction MCC codes
-   - Definitive list of retail MCC codes
-
-3. **DC FIPS Codes**:
+2. **DC FIPS Codes**:
    - Exact FIPS code used in spend data
    - Exact FIPS code used in lodging data (or confirm missing)
 
-4. **Output Table Configuration**:
+3. **Output Table Configuration**:
    - Target BigQuery project ID
    - Target dataset name
    - Target table name
    - Partitioning requirements (if any)
 
-5. **Quality Threshold Guidance**:
+4. **Quality Threshold Guidance**:
    - Business requirements for minimum data quality
    - Acceptable county exclusion rate
    - Seasonal considerations for thresholds
+
+## Appendix: MCC Code Reference
+
+The following MCC codes are configured for the Cost of Travel Index:
+
+### Restaurant Category
+- **5812**: Full-Service Restaurants
+
+### Attraction Category
+- **7996**: Amusement Parks, Carnivals, Circuses, Fortune Tellers
+- **7995**: Betting/Casino Gambling
+- **7998**: Aquariums, Seaquariums, Dolphinariums
+- **7991**: Tourist Attractions and Exhibits
+
+### Retail Category (38 codes)
+- **5971**: Art Dealers and Galleries
+- **5977**: Cosmetic Stores
+- **7230**: Beauty and Barber Shops
+- **5942**: Book Stores
+- **5994**: News Dealers and Newsstands
+- **5611**: Men's and Boys' Clothing and Accessory Stores
+- **5621**: Women's Ready-to-Wear Stores
+- **5631**: Women's Accessory and Specialty Shops
+- **5641**: Children's and Infants' Wear Stores
+- **5651**: Family Clothing Stores
+- **5681**: Furriers and Fur Shops
+- **5691**: Men's and Women's Clothing Stores
+- **5699**: Miscellaneous Apparel and Accessory Shops
+- **5311**: Department Stores
+- **5992**: Florists
+- **5993**: Cigar Stores and Stands
+- **5309**: Duty Free Stores
+- **5310**: Discount Stores
+- **5931**: Used Merchandise and Secondhand Stores
+- **5943**: Stationery Stores, Office and School Supply Stores
+- **5947**: Gift, Card, Novelty, and Souvenir Shops
+- **5950**: Glassware/Crystal Stores
+- **5995**: Pet Shops, Pet Food, and Supplies Stores
+- **5999**: Miscellaneous and Specialty Retail Stores
+- **5944**: Jewelry Stores, Watches, Clocks, and Silverware Stores
+- **5948**: Luggage and Leather Goods Stores
+- **5661**: Shoe Stores
+- **5655**: Sports and Riding Apparel Stores
+- **5832**: Antique Shops
+- **5932**: Antique Shops (duplicate category)
+- **5937**: Antique Reproductions
+- **5940**: Bicycle Shops
+- **5941**: Sporting Goods Stores
+- **5945**: Hobby, Toy, and Game Shops
+- **5946**: Camera and Photographic Supply Stores
+- **5949**: Sewing, Needlework, Fabric, and Piece Goods Stores
+- **5970**: Artist's Supply and Craft Shops
+- **5972**: Stamp and Coin Stores
+
+These lists are configurable in the notebook parameters to allow for refinement based on analysis results.
 
 ---
 
