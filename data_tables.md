@@ -7,7 +7,6 @@
 
 ## Table Name: Transaction Tourism
 
-
 Table URI: `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.transaction_tourism`
 
 
@@ -28,20 +27,20 @@ Table URI: `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.transaction_touris
 
 Table URI : `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.merchant_tourism`
 
-| Field_name | Type |
-|----|----|
-| mtid | STRING |
-| merch_desc | STRING |
-| mcc | STRING |
-| merch_type | INT64 |
-| merch_city | STRING |
-| merch_state | STRING |
-| merch_zip | STRING |
-| merch_country | STRING |
-| z_country | STRING |
-| h3_13 | STRING |
-| delivery_date | DATE |
-| ref_date | DATE |
+| Field_name | Type |    |
+|----|----|----|
+| mtid | STRING |    |
+| merch_desc | STRING |    |
+| mcc | STRING |    |
+| merch_type | INT64 |    |
+| merch_city | STRING |    |
+| merch_state | STRING |    |
+| merch_zip | STRING |    |
+| merch_country | STRING |    |
+| z_country | STRING |    |
+| h3_13 | STRING |    |
+| delivery_date | DATE |    |
+| ref_date | DATE |    |
 
 Note: `ref_date` is the partitioning column for this table.
 
