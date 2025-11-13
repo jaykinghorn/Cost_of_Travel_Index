@@ -58,7 +58,7 @@ This development plan outlines the implementation strategy for building the Cost
 
 - **MCC Code Categories** (configurable to allow category refinement):
   - `mcc_restaurants` (list): [5812] - Full-service restaurants
-  - `mcc_attractions` (list): [7996, 7995, 7998, 7991] - Amusement parks, aquariums, recreation services
+  - `mcc_attractions` (list): [7996, 7995, 7998, 7991, 7933, 7832, 7911, 7929, 7922, 7932, 7994, 7999] - Amusement parks, aquariums, recreation services, bowling alleys, billiards, dance halls, bands/orchestras, theatrical producers, golf courses, public golf courses, recreation services
   - `mcc_retail` (list): ["5971", "5977", "7230", "5942", "5994", "5611", "5621", "5631", "5641", "5651", "5681", "5691", "5699", "5311", "5992", "5993", "5309", "5310", "5931", "5943", "5947", "5950", "5995", "5999", "5944", "5948", "5661", "5655", "5832", "5932", "5937", "5940", "5941", "5945", "5946", "5949", "5970", "5972"] - Various retail categories including art supplies, cosmetics, beauty supplies, books, sporting goods, apparel, department stores, gift shops, jewelry, and specialty retail
 
 - **Data Source Configuration**:
@@ -120,7 +120,7 @@ ORDER BY admin2_id
 - Join to admin_geo_reference on merch_city to get county FIPS
 - Classify transactions by MCC codes:
   - **Restaurants**: MCC 5812 (full-service restaurants)
-  - **Attractions**: MCCs 7996, 7995, 7998, 7991 (amusement parks, aquariums, recreation services)
+  - **Attractions**: MCCs 7996, 7995, 7998, 7991, 7933, 7832, 7911, 7929, 7922, 7932, 7994, 7999 (amusement parks, aquariums, recreation services, bowling, billiards, dance halls, entertainment, golf courses)
   - **Retail**: 38 retail MCCs covering art supplies, cosmetics, books, sporting goods, apparel, jewelry, gift shops, department stores, and specialty retail
 - Select: county_fips, category, trans_amount, trans_date, txid
 
@@ -130,7 +130,8 @@ SELECT
   geo.admin2_id as county_fips,
   CASE
     WHEN m.mcc = '5812' THEN 'restaurant'
-    WHEN m.mcc IN ('7996', '7995', '7998', '7991') THEN 'attraction'
+    WHEN m.mcc IN ('7996', '7995', '7998', '7991', '7933', '7832', '7911',
+                   '7929', '7922', '7932', '7994', '7999') THEN 'attraction'
     WHEN m.mcc IN ('5971', '5977', '7230', '5942', '5994', '5611', '5621', '5631',
                    '5641', '5651', '5681', '5691', '5699', '5311', '5992', '5993',
                    '5309', '5310', '5931', '5943', '5947', '5950', '5995', '5999',
@@ -151,7 +152,8 @@ WHERE t.trans_date BETWEEN @month_start AND @month_end
   AND m.merch_type = 0
   AND geo.country = 'United States'
   AND (m.mcc = '5812'
-    OR m.mcc IN ('7996', '7995', '7998', '7991')
+    OR m.mcc IN ('7996', '7995', '7998', '7991', '7933', '7832', '7911',
+                 '7929', '7922', '7932', '7994', '7999')
     OR m.mcc IN ('5971', '5977', '7230', '5942', '5994', '5611', '5621', '5631',
                  '5641', '5651', '5681', '5691', '5699', '5311', '5992', '5993',
                  '5309', '5310', '5931', '5943', '5947', '5950', '5995', '5999',
@@ -770,11 +772,19 @@ The following MCC codes are configured for the Cost of Travel Index:
 ### Restaurant Category
 - **5812**: Full-Service Restaurants
 
-### Attraction Category
+### Attraction Category (12 codes)
 - **7996**: Amusement Parks, Carnivals, Circuses, Fortune Tellers
 - **7995**: Betting/Casino Gambling
 - **7998**: Aquariums, Seaquariums, Dolphinariums
 - **7991**: Tourist Attractions and Exhibits
+- **7933**: Bowling Alleys
+- **7832**: Motion Picture Theaters
+- **7911**: Dance Halls, Studios, and Schools
+- **7929**: Bands, Orchestras, and Miscellaneous Entertainers
+- **7922**: Theatrical Producers (Except Motion Pictures) and Ticket Agencies
+- **7932**: Billiard and Pool Establishments
+- **7994**: Video Game Arcades/Establishments
+- **7999**: Recreation Services (Not Elsewhere Classified)
 
 ### Retail Category (38 codes)
 - **5971**: Art Dealers and Galleries
