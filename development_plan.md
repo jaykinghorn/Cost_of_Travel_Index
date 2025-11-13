@@ -69,8 +69,8 @@ This development plan outlines the implementation strategy for building the Cost
   - `output_table`: TBD (cost_of_travel_index table name)
 
 - **DC FIPS Code Mapping**:
-  - `dc_fips_code_spend` (string): DC FIPS in spend data
-  - `dc_fips_code_lodging` (string): DC FIPS in lodging data (manual mapping)
+  - `dc_fips_code` (string): "11001" - Washington DC FIPS code placeholder
+  - Note: DC may have different or missing FIPS representation between spend and lodging datasets; manual mapping may be required
 
 **Deliverable**: Python dictionary with all configurable parameters, with comments explaining each
 
@@ -189,10 +189,13 @@ WHERE stay_date IN (@friday_saturday_dates)
 
 **DC FIPS Handling**:
 ```python
-# After loading lodging data
-lodging_df['county_fips'] = lodging_df['county_fips'].replace(
-    {config['dc_fips_code_lodging']: config['dc_fips_code_spend']}
-)
+# After loading lodging data, ensure DC uses consistent FIPS code 11001
+# If DC has different representation in lodging data, map to standard FIPS
+if 'county_fips' in lodging_df.columns:
+    # Normalize DC FIPS to 11001 if it appears differently
+    lodging_df['county_fips'] = lodging_df['county_fips'].replace(
+        {None: '11001'}  # Adjust mapping based on actual lodging data representation
+    )
 ```
 
 **Deliverable**: DataFrame with Friday/Saturday lodging data
@@ -745,8 +748,9 @@ To complete implementation, the following information is required:
    - Date field name(s)
 
 2. **DC FIPS Codes**:
-   - Exact FIPS code used in spend data
-   - Exact FIPS code used in lodging data (or confirm missing)
+   - Standard FIPS code: 11001 (Washington DC)
+   - Verify representation in lodging dataset (may be missing or different)
+   - Confirm if manual mapping needed between datasets
 
 3. **Output Table Configuration**:
    - Target BigQuery project ID
