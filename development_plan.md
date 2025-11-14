@@ -12,7 +12,6 @@ This development plan outlines the implementation strategy for building the Cost
 * **Platform**: Jupyter/Colab notebook compatible with both environments
 * **Data Sources**: BigQuery tables (transaction_tourism, merchant_tourism, admin_geo_reference)
 * **Statistical Method**: P5/P98 outlier removal before calculating percentiles and medians
-* **Accommodations Data**: Uses median transaction from spend data (one transaction representing multiple days)
 * **Configurability**: All parameters (percentiles, thresholds, basket quantities) must be configurable
 
   \
@@ -49,26 +48,29 @@ This development plan outlines the implementation strategy for building the Cost
   * `restaurant_low_percentile` (float): Default 35 (breakfast/lunch)
   * `restaurant_high_percentile` (float): Default 65 (dinner)
 * **Basket Quantities**:
-  * `accommodations_multiplier` (int): Default 1 (median transaction represents full stay)
+  * `avg_lodging` (Float): Default 1 (single transaction for multiple days)
   * `low_price_meals` (int): Default 4 (breakfast & lunch)
   * `high_price_meals` (int): Default 2 (dinner)
   * `attraction_days` (int): Default 2
   * `retail_days` (int): Default 1
 * **Quality Thresholds** (initial estimates, to be refined in Phase 4):
-  * `min_accommodations_transactions` (int): Default 30
+  * `min_lodging_transactions` (int): Default 30
   * `min_restaurant_transactions` (int): Default 50
   * `min_attraction_transactions` (int): Default 20
   * `min_retail_transactions` (int): Default 20
 * **MCC Code Categories** (configurable to allow category refinement):
-  * `mcc_accommodations` (list): \["3728", "3731", "3737", "3738", "3796", "3501"-"3599", "3600"-"3699", "3700"-"3796", "3807", "3808", "3812", "3813", "3815", "3816", "3818", "3824", "3825", "3826", "3828", "3829", "3830", "3831", "3832", "3833", "3834", "3835", "3836", "3838", "7011", "7012"\] - Hotels, motels, resorts, and other accommodations (full list in Appendix)
   * `mcc_restaurants` (list): \[5812\] - Full-service restaurants
   * `mcc_attractions` (list): \[7996, 7995, 7998, 7991, 7933, 7832, 7911, 7929, 7922, 7932, 7994, 7999\] - Amusement parks, aquariums, recreation services, bowling alleys, billiards, dance halls, bands/orchestras, theatrical producers, golf courses, public golf courses, recreation services
   * `mcc_retail` (list): \["5971", "5977", "7230", "5942", "5994", "5611", "5621", "5631", "5641", "5651", "5681", "5691", "5699", "5311", "5992", "5993", "5309", "5310", "5931", "5943", "5947", "5950", "5995", "5999", "5944", "5948", "5661", "5655", "5832", "5932", "5937", "5940", "5941", "5945", "5946", "5949", "5970", "5972"\] - Various retail categories including art supplies, cosmetics, beauty supplies, books, sporting goods, apparel, department stores, gift shops, jewelry, and specialty retail
 * **Data Source Configuration**:
   * `spend_dataset`: "prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment"
   * `geo_dataset`: "data-reference.Geo_Reference"
+  * `lodging_dataset`: TBD (placeholder for KeyData Lodging)
   * `output_dataset`: TBD (destination for results)
   * `output_table`: TBD (cost_of_travel_index table name)
+* **DC FIPS Code Mapping**:
+  * `dc_fips_code` (string): "11001" - Washington DC FIPS code placeholder
+  * Note: DC may have different or missing FIPS representation between spend and lodging datasets; manual mapping may be required
 
 **Deliverable**: Python dictionary with all configurable parameters, with comments explaining each
 
@@ -117,7 +119,7 @@ ORDER BY admin2_id
 
 ### 2.2 Transaction Data Query (Spend Categories)
 
-**Task**: Extract monthly transaction data for accommodations, restaurants, attractions, and retail
+**Task**: Extract monthly transaction data for restaurants, attractions, and retail
 
 * Query `transaction_tourism` joined with `merchant_tourism`
 * Filter by month date range
@@ -125,7 +127,6 @@ ORDER BY admin2_id
 * Filter by physical merchant locations (merch_type = 0)
 * Join to admin_geo_reference on merch_city to get county FIPS
 * Classify transactions by MCC codes:
-  * **Accommodations**: MCCs 3501-3838, 7011, 7012 (hotels, motels, resorts - 300+ codes, full list in Appendix)
   * **Restaurants**: MCC 5812 (full-service restaurants)
   * **Attractions**: MCCs 7996, 7995, 7998, 7991, 7933, 7832, 7911, 7929, 7922, 7932, 7994, 7999 (amusement parks, aquariums, recreation services, bowling, billiards, dance halls, entertainment, golf courses)
   * **Retail**: 38 retail MCCs covering art supplies, cosmetics, books, sporting goods, apparel, jewelry, gift shops, department stores, and specialty retail
@@ -137,8 +138,6 @@ ORDER BY admin2_id
 SELECT
   geo.admin2_id as county_fips,
   CASE
-    WHEN m.mcc IN ('3728', '3731', '3737', '3738', '3796', '3501', '3502', -- ... (full accommodations MCC list)
-                   '7011', '7012') THEN 'accommodations'
     WHEN m.mcc = '5812' THEN 'restaurant'
     WHEN m.mcc IN ('7996', '7995', '7998', '7991', '7933', '7832', '7911',
                    '7929', '7922', '7932', '7994', '7999') THEN 'attraction'
@@ -161,9 +160,7 @@ WHERE t.trans_date BETWEEN @month_start AND @month_end
   AND t.trans_distance > 60
   AND m.merch_type = 0
   AND geo.country = 'United States'
-  AND (m.mcc IN ('3728', '3731', '3737', '3738', '3796', '3501', '3502', -- ... (accommodations filter)
-                 '7011', '7012')
-    OR m.mcc = '5812'
+  AND (m.mcc = '5812'
     OR m.mcc IN ('7996', '7995', '7998', '7991', '7933', '7832', '7911',
                  '7929', '7922', '7932', '7994', '7999')
     OR m.mcc IN ('5971', '5977', '7230', '5942', '5994', '5611', '5621', '5631',
@@ -173,15 +170,61 @@ WHERE t.trans_date BETWEEN @month_start AND @month_end
                  '5941', '5945', '5946', '5949', '5970', '5972'))
 ```
 
-**Note**: Full accommodations MCC list (300+ codes) should be included in actual implementation - see Appendix for complete list.
-
 **Query Optimization**:
 
 * Use parameterized queries for dates
 * Partition by ref_date (merchant_tourism partitioning column)
 * Consider using APPROX_QUANTILES for initial exploration if exact percentiles are too expensive
 
-**Deliverable**: DataFrame with all spend transactions for the month (including accommodations)
+**Deliverable**: DataFrame with all spend transactions for the month
+
+### 2.3 Lodging Data Query
+
+**Task**: Extract Friday/Saturday lodging data for the month
+
+* Query lodging dataset (schema TBD, awaiting details)
+* Filter for Friday and Saturday nights only within target month
+* Extract: county_fips, night_date, ADR (average daily rate), property_id
+* **Handle DC FIPS**: Apply manual FIPS code mapping for Washington DC
+* Group by property and date for deduplication if needed
+
+**SQL Structure** (placeholder - adjust when lodging schema available):
+
+```sql
+SELECT
+  county_fips,  -- Adjust field name based on actual schema
+  stay_date as night_date,
+  adr,
+  property_id
+FROM `[lodging_dataset_uri]`
+WHERE stay_date IN (@friday_saturday_dates)
+  AND stay_date BETWEEN @month_start AND @month_end
+  AND country = 'United States'
+```
+
+**DC FIPS Handling**:
+
+```python
+# After loading lodging data, ensure DC uses consistent FIPS code 11001
+# If DC has different representation in lodging data, map to standard FIPS
+if 'county_fips' in lodging_df.columns:
+    # Normalize DC FIPS to 11001 if it appears differently
+    lodging_df['county_fips'] = lodging_df['county_fips'].replace(
+        {None: '11001'}  # Adjust mapping based on actual lodging data representation
+    )
+```
+
+**Deliverable**: DataFrame with Friday/Saturday lodging data
+
+### 2.4 Property Count Query
+
+**Task**: Count distinct hotel properties per county for quality thresholds
+
+* Count distinct property_id per county_fips
+* Based on same Friday/Saturday filter as lodging data
+* Will be used to validate minimum reporting threshold
+
+**Deliverable**: DataFrame with county_fips and property_count
 
 
 ---
@@ -299,41 +342,43 @@ retail_stats['retail_cost'] = retail_stats['median'] * config['retail_days']
 
 **Deliverable**: DataFrame with county-level retail costs
 
-### 3.5 Accommodations Calculations
+### 3.5 Lodging Calculations
 
-**Task**: Calculate accommodations costs per county using median transaction
+**Task**: Calculate Friday/Saturday lodging costs per county
 
-* Input: Filtered accommodations transactions from spend data
+* Input: Friday/Saturday lodging data (already filtered in SQL)
 * Group by county_fips
-* Calculate median transaction amount (represents full stay, not per-night)
-* Multiply by basket quantity (default 1 - median transaction already represents typical stay)
-* Track transaction counts per county
-* Note: Using median transaction instead of per-night rates; one transaction typically represents the full accommodation booking
+* Calculate mean ADR across all Friday/Saturday nights in month
+* Multiply by basket quantity (default 2 nights)
+* Track property counts per county (for quality threshold)
+* Note: Using mean instead of median because ADR is already an aggregated metric
 
 **Pandas Operations**:
 
 ```python
-accommodations_df = filtered_df[filtered_df['category'] == 'accommodations']
-accommodations_stats = accommodations_df.groupby('county_fips')['trans_amount'].agg([
-    ('median', 'median'),
-    ('txn_count', 'count')
-])
-accommodations_stats['accommodations_cost'] = accommodations_stats['median'] * config['accommodations_multiplier']
+lodging_stats = lodging_df.groupby('county_fips').agg({
+    'adr': 'mean',
+    'property_id': 'nunique'
+})
+lodging_stats.rename(columns={
+    'adr': 'avg_adr',
+    'property_id': 'hotel_property_count'
+}, inplace=True)
+lodging_stats['lodging_cost'] = lodging_stats['avg_adr'] * config['lodging_nights']
 ```
 
 **Special Handling**:
 
-* Accommodations transactions typically represent multi-day bookings rather than single nights
-* The median transaction captures the typical cost of a weekend stay
-* No need to separate Friday/Saturday as transaction represents full booking
+* If lodging data includes both nightly rates and occupancy, calculate weighted average
+* Handle properties with missing Friday or Saturday data (use available nights)
 
-**Deliverable**: DataFrame with county-level accommodations costs
+**Deliverable**: DataFrame with county-level lodging costs and property counts
 
 ### 3.6 Merge Components into Final Dataset
 
 **Task**: Combine all cost components into single county-level DataFrame
 
-* Merge restaurant, attraction, retail, and accommodations DataFrames on county_fips
+* Merge restaurant, attraction, retail, and lodging DataFrames on county_fips
 * Use outer join to preserve all counties with any data
 * Calculate total_basket_cost as sum of all components
 * Add month_date column with target month
@@ -349,13 +394,13 @@ final_df = county_ref_df[['county_fips']].merge(
 ).merge(
     retail_stats, on='county_fips', how='left'
 ).merge(
-    accommodations_stats, on='county_fips', how='left'
+    lodging_stats, on='county_fips', how='left'
 )
 
 # Calculate total basket cost
 final_df['total_basket_cost'] = final_df[[
     'breakfast_lunch_cost', 'dinner_cost', 'attraction_cost',
-    'retail_cost', 'accommodations_cost'
+    'retail_cost', 'lodging_cost'
 ]].sum(axis=1, skipna=False)  # NaN if any component is missing
 ```
 
@@ -372,6 +417,7 @@ final_df['total_basket_cost'] = final_df[[
 
 * Create boolean column `meets_threshold`
 * Check against all configured thresholds:
+  * Minimum hotel properties reporting
   * Minimum transaction counts per category
   * All basket components must have valid (non-NaN) values
 * Counties not meeting thresholds still included in output but flagged
@@ -380,10 +426,11 @@ final_df['total_basket_cost'] = final_df[[
 
 ```python
 final_df['meets_threshold'] = (
-    (final_df['accommodations_txn_count'] >= config['min_accommodations_transactions']) &
+    (final_df['hotel_property_count'] >= config['min_hotel_properties']) &
     (final_df['restaurant_txn_count'] >= config['min_restaurant_transactions']) &
     (final_df['attraction_txn_count'] >= config['min_attraction_transactions']) &
     (final_df['retail_txn_count'] >= config['min_retail_transactions']) &
+    (final_df['lodging_txn_count'] >= config['min_lodging_transactions']) &
     (final_df['total_basket_cost'].notna())
 )
 ```
@@ -412,7 +459,7 @@ final_df['meets_threshold'] = (
 ```python
 print(f"Total counties processed: {len(final_df)}")
 print(f"Counties meeting thresholds: {final_df['meets_threshold'].sum()}")
-print(f"Counties missing accommodations data: {final_df['accommodations_cost'].isna().sum()}")
+print(f"Counties missing lodging data: {final_df['lodging_cost'].isna().sum()}")
 print(f"\nBasket cost distribution:")
 print(final_df['total_basket_cost'].describe())
 ```
@@ -443,20 +490,21 @@ print(final_df['total_basket_cost'].describe())
 * Ensure column names match schema exactly:
   * county_fips (string)
   * month_date (date)
-  * accommodations_cost (float)
+  * lodging_cost (float)
   * breakfast_lunch_cost (float)
   * dinner_cost (float)
   * attraction_cost (float)
   * retail_cost (float)
   * total_basket_cost (float)
-  * accommodations_txn_count (integer)
+  * lodging_txn_count (integer)
   * restaurant_txn_count (integer)
   * attraction_txn_count (integer)
   * retail_txn_count (integer)
-  * accommodations_txn_removed (integer)
+  * lodging_txn_removed (integer)
   * restaurant_txn_removed (integer)
   * attraction_txn_removed (integer)
   * retail_txn_removed (integer)
+  * hotel_property_count (integer)
   * meets_threshold (boolean)
   * created_at (timestamp)
 
@@ -469,9 +517,9 @@ output_df['created_at'] = pd.Timestamp.now()
 
 # Ensure proper data types
 integer_cols = [
-    'accommodations_txn_count', 'restaurant_txn_count', 'attraction_txn_count',
-    'retail_txn_count', 'accommodations_txn_removed', 'restaurant_txn_removed',
-    'attraction_txn_removed', 'retail_txn_removed'
+    'lodging_txn_count', 'restaurant_txn_count', 'attraction_txn_count',
+    'retail_txn_count', 'lodging_txn_removed', 'restaurant_txn_removed',
+    'attraction_txn_removed', 'retail_txn_removed', 'hotel_property_count'
 ]
 for col in integer_cols:
     output_df[col] = output_df[col].fillna(0).astype(int)
@@ -503,22 +551,9 @@ table_id = f"{config['output_dataset']}.{config['output_table']}"
 schema = [
     bigquery.SchemaField("county_fips", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("month_date", "DATE", mode="REQUIRED"),
-    bigquery.SchemaField("accommodations_cost", "FLOAT"),
+    bigquery.SchemaField("lodging_cost", "FLOAT"),
     bigquery.SchemaField("breakfast_lunch_cost", "FLOAT"),
-    bigquery.SchemaField("dinner_cost", "FLOAT"),
-    bigquery.SchemaField("attraction_cost", "FLOAT"),
-    bigquery.SchemaField("retail_cost", "FLOAT"),
-    bigquery.SchemaField("total_basket_cost", "FLOAT"),
-    bigquery.SchemaField("accommodations_txn_count", "INTEGER"),
-    bigquery.SchemaField("restaurant_txn_count", "INTEGER"),
-    bigquery.SchemaField("attraction_txn_count", "INTEGER"),
-    bigquery.SchemaField("retail_txn_count", "INTEGER"),
-    bigquery.SchemaField("accommodations_txn_removed", "INTEGER"),
-    bigquery.SchemaField("restaurant_txn_removed", "INTEGER"),
-    bigquery.SchemaField("attraction_txn_removed", "INTEGER"),
-    bigquery.SchemaField("retail_txn_removed", "INTEGER"),
-    bigquery.SchemaField("meets_threshold", "BOOLEAN"),
-    bigquery.SchemaField("created_at", "TIMESTAMP"),
+    # ... (all fields)
 ]
 
 job_config = bigquery.LoadJobConfig(
@@ -792,12 +827,24 @@ Future enhancements beyond initial scope:
 
 To complete implementation, the following information is required:
 
-1. **Output Table Configuration**:
+
+1. **Lodging Dataset Details**:
+   * Full table URI
+   * Schema (field names and types)
+   * Partitioning/clustering details
+   * ADR calculation methodology
+   * Property ID field name
+   * Date field name(s)
+2. **DC FIPS Codes**:
+   * Standard FIPS code: 11001 (Washington DC)
+   * Verify representation in lodging dataset (may be missing or different)
+   * Confirm if manual mapping needed between datasets
+3. **Output Table Configuration**:
    * Target BigQuery project ID
    * Target dataset name
    * Target table name
    * Partitioning requirements (if any)
-2. **Quality Threshold Guidance**:
+4. **Quality Threshold Guidance**:
    * Business requirements for minimum data quality
    * Acceptable county exclusion rate
    * Seasonal considerations for thresholds
@@ -805,21 +852,6 @@ To complete implementation, the following information is required:
 ## Appendix: MCC Code Reference
 
 The following MCC codes are configured for the Cost of Travel Index:
-
-### Accommodations Category (300+ codes)
-
-**Hotels, Motels, and Resorts (3501-3838, 7011-7012)**:
-
-* **3501-3599**: Various hotel chains and properties (Holiday Inn, Best Western, Marriott, Hilton, Sheraton, etc.)
-* **3600-3699**: Additional hotel chains and properties
-* **3700-3796**: Extended stay and resort properties
-* **3728, 3731, 3737, 3738, 3796**: Specific hotel brands
-* **3807, 3808, 3812, 3813, 3815, 3816, 3818**: Specialized accommodation properties
-* **3824-3838**: Additional accommodation types
-* **7011**: Hotels, Motels, Resorts (general category)
-* **7012**: Timeshares
-
-**Complete MCC List**: ["3728", "3731", "3737", "3738", "3796", "3501", "3502", "3503", "3504", "3505", "3506", "3507", "3508", "3509", "3510", "3511", "3512", "3513", "3514", "3515", "3516", "3517", "3518", "3519", "3520", "3521", "3522", "3523", "3524", "3525", "3526", "3527", "3528", "3529", "3530", "3531", "3532", "3533", "3534", "3535", "3536", "3537", "3538", "3539", "3540", "3541", "3542", "3543", "3544", "3545", "3546", "3547", "3548", "3549", "3550", "3551", "3552", "3553", "3554", "3555", "3556", "3557", "3558", "3559", "3560", "3561", "3562", "3563", "3564", "3565", "3566", "3567", "3568", "3569", "3570", "3571", "3572", "3573", "3574", "3575", "3576", "3577", "3578", "3579", "3580", "3581", "3582", "3583", "3584", "3585", "3586", "3587", "3588", "3589", "3590", "3591", "3592", "3593", "3594", "3595", "3596", "3597", "3598", "3599", "3600", "3601", "3602", "3603", "3604", "3605", "3606", "3607", "3608", "3609", "3610", "3611", "3612", "3613", "3614", "3615", "3616", "3617", "3618", "3619", "3620", "3621", "3622", "3623", "3624", "3625", "3626", "3627", "3628", "3629", "3630", "3631", "3632", "3633", "3634", "3635", "3636", "3637", "3638", "3639", "3640", "3641", "3642", "3643", "3644", "3645", "3646", "3647", "3648", "3649", "3650", "3651", "3652", "3653", "3654", "3655", "3656", "3657", "3658", "3659", "3660", "3661", "3662", "3663", "3664", "3665", "3666", "3667", "3668", "3669", "3670", "3671", "3672", "3673", "3674", "3675", "3676", "3677", "3678", "3679", "3680", "3681", "3682", "3683", "3684", "3685", "3686", "3687", "3688", "3689", "3690", "3691", "3692", "3693", "3694", "3695", "3696", "3697", "3698", "3699", "3700", "3701", "3702", "3703", "3704", "3705", "3706", "3707", "3708", "3709", "3710", "3711", "3712", "3713", "3714", "3715", "3716", "3717", "3718", "3719", "3720", "3721", "3722", "3723", "3724", "3725", "3726", "3727", "3729", "3730", "3732", "3733", "3734", "3735", "3736", "3739", "3740", "3741", "3742", "3743", "3744", "3745", "3746", "3747", "3748", "3749", "3750", "3751", "3752", "3753", "3754", "3755", "3756", "3757", "3758", "3759", "3760", "3761", "3762", "3763", "3764", "3765", "3766", "3767", "3768", "3769", "3770", "3771", "3772", "3773", "3774", "3775", "3776", "3777", "3778", "3779", "3780", "3781", "3782", "3783", "3784", "3785", "3786", "3787", "3788", "3789", "3790", "3791", "3793", "3795", "3807", "3808", "3812", "3813", "3815", "3816", "3818", "3824", "3825", "3826", "3828", "3829", "3830", "3831", "3832", "3833", "3834", "3835", "3836", "3838", "7011", "7012"]
 
 ### Restaurant Category
 
