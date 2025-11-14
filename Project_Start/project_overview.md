@@ -15,19 +15,18 @@ Our goal is to help destinations understand how they are performing relative to 
 
 ### Data Sources
 
-* **Source**: Zartico's spend and lodging datasets (structured BigQuery tables)
+* **Source**: Zartico's spend data (structured BigQuery tables)
 * **Update Frequency**: Daily
 * **Historical Coverage**: Monthly calculations from 2022-01-01 forward
-* **Geographic Scope**: County-level analysis across the United States
+* **Geographic Scope**:  city, county and state-level analysis across the United States
 
 ### Basket of Goods Calculation
 
 The index represents a hypothetical three-day weekend experienced by a couple traveling and experiencing a destination. The basket of goods includes:
 
 
-1. **Lodging**: 2 hotel nights at Friday/Saturday average ADR
-   * Calculated from all Friday and Saturday nights within the month
-   * Averaged across both nights to capture weekend rates
+
+1. **Lodging**: median monthly transaction value at Hotels, Casino hotels, Bed and Breakfasts and other accommodations. 
 2. **Restaurant Meals**: 6 total meals
    * 4 meals at 35th percentile price (breakfast and lunch - typically cheaper)
    * 2 meals at 65th percentile price (dinner - typically most expensive)
@@ -36,7 +35,7 @@ The index represents a hypothetical three-day weekend experienced by a couple tr
 
 ### Statistical Approach
 
-**County-Level Specificity**: All percentiles and medians are calculated within each county for each month to reflect local market conditions (e.g., Miami vs. rural Kansas).
+**City, County ad state-Level Specificity**: All percentiles and medians are calculated within each county for each month to reflect local market conditions (e.g., Miami vs. rural Kansas).
 
 **Outlier Removal**: Hybrid percentile approach applied before calculating medians and percentiles:
 
@@ -78,6 +77,7 @@ Counties not meeting thresholds will be excluded from monthly calculations.
 ### Processing Workflow
 
 
+
 1. SQL query to extract monthly transaction data by county
 2. Python-based outlier removal and statistical calculations
 3. Calculate basket components per county
@@ -94,7 +94,7 @@ Counties not meeting thresholds will be excluded from monthly calculations.
 
 * `county_fips` (string): County FIPS code identifier (joins to county names table)
 * `month_date` (date): YYYY-MM-DD format (e.g., 2024-01-01)
-* `lodging_cost` (float): Cost for 2 nights
+* `lodging_cost` (float): Median accommodations cost
 * `breakfast_lunch_cost` (float): Cost for 4 meals at P35
 * `dinner_cost` (float): Cost for 2 meals at P65
 * `attraction_cost` (float): Cost for 2 days
@@ -117,12 +117,9 @@ Counties not meeting thresholds will be excluded from monthly calculations.
 
 ## **Output & Usage**
 
-Produce a monthly Cost of Travel Index for each county in the United States that has sufficient data to meet quality thresholds.
+Produce a monthly Cost of Travel Index for each county in the United States that has sufficient data to meet quality thresholds. (City and State as fast-follow options) 
 
 This data can then be aggregated at the state, region, and national level by month to track changes in the travel industry over time.
-
-
-Technical Note: Washington DC has a county FIPS code in our spend data, but not in our KeyData Lodging data. We will need to manually add the DC. FIPS code to join the two data sets together. 
 
 
 **Out of Scope for V0.1.0**:
