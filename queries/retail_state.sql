@@ -91,8 +91,8 @@ SELECT
 
   -- Data quality assessment
   CASE
-    WHEN COUNT(*) < min_sample_exclude THEN 'EXCLUDE'
-    WHEN COUNT(*) < min_sample_rolling THEN 'ROLLING_3MO'
+    WHEN COUNT(DISTINCT membccid) < min_sample_exclude THEN 'EXCLUDE'
+    WHEN COUNT(DISTINCT membccid) < min_sample_rolling THEN 'ROLLING_3MO'
     ELSE 'SINGLE_MONTH'
   END as data_quality_flag,
 
