@@ -11,8 +11,12 @@
 
 -- CONFIGURATION: Update these values as needed
 DECLARE start_date DATE DEFAULT '2025-07-01';
-DECLARE end_date DATE DEFAULT '2025-07-14';
+DECLARE end_date DATE DEFAULT '2025-07-31';
 DECLARE distance_threshold INT64 DEFAULT 60;  -- Miles for visitor classification
+
+-- DATA QUALITY THRESHOLDS (95% CI, 5% MOE)
+DECLARE min_sample_exclude INT64 DEFAULT 600;  -- Exclude geography if below this
+DECLARE min_sample_rolling INT64 DEFAULT 2000; -- Use 3-month rolling if below this
 
 -- ============================================================================
 -- MAIN QUERY
@@ -57,14 +61,27 @@ restaurants_no_outliers AS (
     AND r.trans_amount <= t.p98
 )
 
--- Calculate final percentiles after outlier removal
+-- Calculate final percentiles with data quality flags
 SELECT
   merch_state,
+  DATE_TRUNC(start_date, MONTH) as month_date,  -- First day of month for joining
   APPROX_QUANTILES(trans_amount, 100)[OFFSET(35)] as breakfast_lunch_cost,
   APPROX_QUANTILES(trans_amount, 100)[OFFSET(65)] as dinner_cost,
   APPROX_QUANTILES(trans_amount, 100)[OFFSET(50)] as median_meal_cost,
   COUNT(*) as transaction_count,
-  COUNT(DISTINCT membccid) as unique_visitors
+  COUNT(DISTINCT membccid) as unique_visitors,
+
+  -- Data quality assessment
+  CASE
+    WHEN COUNT(*) < min_sample_exclude THEN 'EXCLUDE'
+    WHEN COUNT(*) < min_sample_rolling THEN 'ROLLING_3MO'
+    ELSE 'SINGLE_MONTH'
+  END as data_quality_flag,
+
+  -- Metadata for reference
+  start_date as period_start,
+  end_date as period_end,
+  CURRENT_TIMESTAMP() as calculation_timestamp
 FROM restaurants_no_outliers
 GROUP BY merch_state
 ORDER BY transaction_count DESC

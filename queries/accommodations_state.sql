@@ -21,9 +21,13 @@
 
 -- CONFIGURATION: Update these values as needed
 DECLARE start_date DATE DEFAULT '2025-07-01';
-DECLARE end_date DATE DEFAULT '2025-07-14';
+DECLARE end_date DATE DEFAULT '2025-07-31';
 DECLARE distance_threshold INT64 DEFAULT 60;  -- Miles for visitor classification
 DECLARE min_transaction_amount FLOAT64 DEFAULT 50.0;  -- Minimum to qualify as accommodation booking
+
+-- DATA QUALITY THRESHOLDS (95% CI, 5% MOE)
+DECLARE min_sample_exclude INT64 DEFAULT 600;  -- Exclude geography if below this
+DECLARE min_sample_rolling INT64 DEFAULT 2000; -- Use 3-month rolling if below this
 
 -- ============================================================================
 -- MAIN QUERY
@@ -69,17 +73,31 @@ accommodations_no_outliers AS (
     AND a.trans_amount <= t.p98
 )
 
--- Calculate median accommodation cost per state
+-- Calculate median accommodation cost with data quality flags
 SELECT
   merch_state,
+  DATE_TRUNC(start_date, MONTH) as month_date,  -- First day of month for joining
   APPROX_QUANTILES(trans_amount, 100)[OFFSET(50)] as accommodation_cost,
   COUNT(*) as transaction_count,
   COUNT(DISTINCT membccid) as unique_visitors,
+
   -- Additional diagnostics
   MIN(trans_amount) as min_cost,
   MAX(trans_amount) as max_cost,
   APPROX_QUANTILES(trans_amount, 4)[OFFSET(1)] as q25,
-  APPROX_QUANTILES(trans_amount, 4)[OFFSET(3)] as q75
+  APPROX_QUANTILES(trans_amount, 4)[OFFSET(3)] as q75,
+
+  -- Data quality assessment
+  CASE
+    WHEN COUNT(*) < min_sample_exclude THEN 'EXCLUDE'
+    WHEN COUNT(*) < min_sample_rolling THEN 'ROLLING_3MO'
+    ELSE 'SINGLE_MONTH'
+  END as data_quality_flag,
+
+  -- Metadata for reference
+  start_date as period_start,
+  end_date as period_end,
+  CURRENT_TIMESTAMP() as calculation_timestamp
 FROM accommodations_no_outliers
 GROUP BY merch_state
 ORDER BY transaction_count DESC
