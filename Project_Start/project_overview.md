@@ -26,7 +26,8 @@ The index represents a hypothetical three-day weekend experienced by a couple tr
 
 
 
-1. **Lodging**: median monthly transaction value at Hotels, Casino hotels, Bed and Breakfasts and other accommodations. 
+
+1. **Lodging**: median monthly transaction value at Hotels, Casino hotels, Bed and Breakfasts and other accommodations.
 2. **Restaurant Meals**: 6 total meals
    * 4 meals at 35th percentile price (breakfast and lunch - typically cheaper)
    * 2 meals at 65th percentile price (dinner - typically most expensive)
@@ -35,34 +36,56 @@ The index represents a hypothetical three-day weekend experienced by a couple tr
 
 ### Statistical Approach
 
-**City, County ad state-Level Specificity**: All percentiles and medians are calculated within each county for each month to reflect local market conditions (e.g., Miami vs. rural Kansas).
+**State-Level Specificity**: All percentiles and medians are calculated within each state for each month to reflect regional market conditions.
 
-**Outlier Removal**: Hybrid percentile approach applied before calculating medians and percentiles:
+**Transaction Analysis Approach**:
 
-* Remove transactions below 5th percentile (P5)
-* Remove transactions above 98th percentile (P98)
+* **No Aggregation**: Individual transactions analyzed directly for restaurants, attractions, and retail
+* **Accommodations**: Individual transactions with $50 minimum threshold to filter incidental charges (parking fees, minibar, etc.)
+* **Visitor Classification**: Transactions where distance from home > 60 miles
+* **Physical Locations Only**: Online/e-commerce transactions excluded (merch_type = 0)
+
+**Outlier Removal**: P5/P98 percentile approach applied before calculating medians and percentiles:
+
+* Remove transactions below 5th percentile (P5) per state
+* Remove transactions above 98th percentile (P98) per state
 * Rationale: Eliminates extreme outliers ($0.01 errors and $20,000 anomalies) while preserving legitimate high/low spending
+* Applied consistently across all spending categories
 
 **Percentile Calculations**:
 
-* 35th and 65th percentiles for restaurant meals calculated from filtered transaction data per county per month
+* Restaurants: P35 (breakfast/lunch) and P65 (dinner) calculated from filtered transaction data
+* Calculated after outlier removal to represent typical meal costs
 
 **Median Calculations**:
 
-* Attraction and retail spending use median values after outlier removal
+* Accommodations, attractions, and retail use median (P50) after outlier removal
 * More robust to remaining variance than mean
 
-**Configuration**: Percentile thresholds and basket quantities are configurable parameters in the notebook to allow methodology fine-tuning.
+**Configuration**: All thresholds configurable via SQL DECLARE statements:
+
+* Date ranges (default: full month)
+* Distance threshold (default: 60 miles)
+* Minimum transaction amounts (default: $50 for accommodations, $0 for others)
+* Data quality thresholds (600/2000 samples)
 
 ### Data Quality Thresholds
 
-Counties must meet statistical thresholds to have a Cost of Travel Index calculated:
+States are evaluated using statistical sample size requirements to ensure reliable estimates:
 
-* Minimum number of hotel properties reporting
-* Minimum transaction counts per category
-* Specific thresholds TBD during exploratory data analysis
+**Minimum Sample Sizes** (95% confidence interval, 5% margin of error):
 
-Counties not meeting thresholds will be excluded from monthly calculations.
+* **600 transactions**: Minimum threshold - states below this are flagged as EXCLUDE
+* **2,000 transactions**: Rolling average threshold - states between 600-2,000 flagged as ROLLING_3MO
+* **Above 2,000**: Sufficient for single-month estimates - flagged as SINGLE_MONTH
+
+**Data Quality Flags**:
+
+* `EXCLUDE`: Insufficient sample size (< 600 transactions) - exclude from index
+* `ROLLING_3MO`: Limited sample (600-1,999 transactions) - use 3-month rolling average
+* `SINGLE_MONTH`: Sufficient sample (≥ 2,000 transactions) - use single month data
+
+**Applied Per Category**: Each spending category (accommodations, restaurants, attractions, retail) has independent quality flags, allowing partial index calculation when some categories meet thresholds while others don't.
 
 
 ## **Technical Implementation**
@@ -78,17 +101,18 @@ Counties not meeting thresholds will be excluded from monthly calculations.
 
 
 
-1. SQL query to extract monthly transaction data by county
+
+1. SQL query to extract monthly national, region and state transaction data by month
 2. Python-based outlier removal and statistical calculations
-3. Calculate basket components per county
+3. Calculate basket components per month for national, regional and state-level indices. 
 4. Apply data quality thresholds
 5. Write results to output table in BigQuery
 
 ### Output Table Schema
 
-**Granularity**: One row per county per month
+**Granularity**: Multiple datbles One row per county per month
 
-**Primary Key**: County FIPS code + Month date
+**Primary Key**: State Abbreviation, Region Name + Month date
 
 **Columns**:
 
@@ -117,7 +141,7 @@ Counties not meeting thresholds will be excluded from monthly calculations.
 
 ## **Output & Usage**
 
-Produce a monthly Cost of Travel Index for each county in the United States that has sufficient data to meet quality thresholds. (City and State as fast-follow options) 
+Produce a monthly Cost of Travel Index for each county in the United States that has sufficient data to meet quality thresholds. (City and State as fast-follow options)
 
 This data can then be aggregated at the state, region, and national level by month to track changes in the travel industry over time.
 
@@ -132,6 +156,10 @@ This data can then be aggregated at the state, region, and national level by mon
 
 
 
+Notes
+
+* DE meals are lower than expected. Katie Stadius flagged that they are reviewing the Delaware spend data. 
+* There is variance between the accommodations calculated by this script and the values from KeyData. More discovery helpful to determine which to use long-term. 
 
 
 

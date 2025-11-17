@@ -35,6 +35,7 @@ WITH retail_transactions AS (
   -- Extract all retail transactions (no aggregation)
   SELECT
     m.merch_state,
+    DATE_TRUNC(t.trans_date, MONTH) as month_date,
     t.trans_amount,
     t.membccid
   FROM `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.transaction_tourism` t
@@ -54,25 +55,28 @@ WITH retail_transactions AS (
     AND t.trans_amount >= min_transaction_amount  -- Optional minimum filter
 ),
 
--- Calculate P5 and P98 thresholds per state for outlier removal
+-- Calculate P5 and P98 thresholds per state per month for outlier removal
 state_thresholds AS (
   SELECT
     merch_state,
+    month_date,
     APPROX_QUANTILES(trans_amount, 100)[OFFSET(5)] as p5,
     APPROX_QUANTILES(trans_amount, 100)[OFFSET(98)] as p98
   FROM retail_transactions
-  GROUP BY merch_state
+  GROUP BY merch_state, month_date
 ),
 
 -- Filter out outliers (transactions below P5 or above P98)
 retail_no_outliers AS (
   SELECT
     r.merch_state,
+    r.month_date,
     r.trans_amount,
     r.membccid
   FROM retail_transactions r
   JOIN state_thresholds t
     ON r.merch_state = t.merch_state
+    AND r.month_date = t.month_date
   WHERE r.trans_amount >= t.p5
     AND r.trans_amount <= t.p98
 )
@@ -80,7 +84,7 @@ retail_no_outliers AS (
 -- Calculate median per-transaction retail cost with data quality flags
 SELECT
   merch_state,
-  DATE_TRUNC(start_date, MONTH) as month_date,  -- First day of month for joining
+  month_date,  -- First day of month for joining
   APPROX_QUANTILES(trans_amount, 100)[OFFSET(50)] as retail_cost,
   COUNT(*) as transaction_count,
   COUNT(DISTINCT membccid) as unique_visitors,
@@ -93,9 +97,9 @@ SELECT
   END as data_quality_flag,
 
   -- Metadata for reference
-  start_date as period_start,
-  end_date as period_end,
+  MIN(start_date) as period_start,
+  MAX(end_date) as period_end,
   CURRENT_TIMESTAMP() as calculation_timestamp
 FROM retail_no_outliers
-GROUP BY merch_state
-ORDER BY transaction_count DESC
+GROUP BY merch_state, month_date
+ORDER BY month_date, transaction_count DESC
