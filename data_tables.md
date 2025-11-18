@@ -65,4 +65,16 @@ Table URI: `data-reference.Geo_Reference.admin_geo_reference`
 | admin_pk | INT64 |
 | processed_timestamp | TIMESTAMP |
 
+## Table Name: us_census_region_divisions_bridge_table
+
+Table URI: `prj-sandbox-i7sk.jk_testing.us_census_region_divisions_bridge_table`\`
+
+| Field_name | Type |
+|----|----|
+| state_name | STRING |
+| abbreviation | STRING |
+| state_fips_code | STRING |
+| census_region | STRING |
+| census_region_division | STRING |
+
 

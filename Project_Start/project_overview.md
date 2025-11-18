@@ -18,7 +18,7 @@ Our goal is to help destinations understand how they are performing relative to 
 * **Source**: Zartico's spend data (structured BigQuery tables)
 * **Update Frequency**: Daily
 * **Historical Coverage**: Monthly calculations from 2022-01-01 forward
-* **Geographic Scope**: national, regional, state, county and city-level analysis across the United States (Phase 1 focus: state-level; county and city-level analyses are out of scope for initial implementation)
+* **Geographic Scope**:  city, county and state-level analysis across the United States
 
 ### Basket of Goods Calculation
 
@@ -27,12 +27,12 @@ The index represents a hypothetical three-day weekend experienced by a couple tr
 
 
 
-1. **Accommodations**: median monthly transaction value at Hotels, Casino hotels, Bed and Breakfasts and other accommodations.
+1. **Lodging**: median monthly transaction value at Hotels, Casino hotels, Bed and Breakfasts and other accommodations.
 2. **Restaurant Meals**: 6 total meals
    * 4 meals at 35th percentile price (breakfast and lunch - typically cheaper)
    * 2 meals at 65th percentile price (dinner - typically most expensive)
 3. **Attractions**: 2 days of average daily attraction spending
-4. **Retail**: 1 day of average daily retail spending
+4. **Retail**: 2 days of average daily retail spending
 
 ### Statistical Approach
 
@@ -75,15 +75,15 @@ States are evaluated using statistical sample size requirements to ensure reliab
 
 **Minimum Sample Sizes** (95% confidence interval, 5% margin of error):
 
-* **600 unique visitors**: Minimum threshold - states below this are flagged as EXCLUDE
-* **2,000 unique visitors**: Rolling average threshold - states between 600-2,000 flagged as ROLLING_3MO
+* **600 transactions**: Minimum threshold - states below this are flagged as EXCLUDE
+* **2,000 transactions**: Rolling average threshold - states between 600-2,000 flagged as ROLLING_3MO
 * **Above 2,000**: Sufficient for single-month estimates - flagged as SINGLE_MONTH
 
 **Data Quality Flags**:
 
-* `EXCLUDE`: Insufficient sample size (< 600 unique visitors) - exclude from index
-* `ROLLING_3MO`: Limited sample (600-1,999 unique visitors) - use 3-month rolling average
-* `SINGLE_MONTH`: Sufficient sample (≥ 2,000 unique visitors) - use single month data
+* `EXCLUDE`: Insufficient sample size (< 600 transactions) - exclude from index
+* `ROLLING_3MO`: Limited sample (600-1,999 transactions) - use 3-month rolling average
+* `SINGLE_MONTH`: Sufficient sample (≥ 2,000 transactions) - use single month data
 
 **Applied Per Category**: Each spending category (accommodations, restaurants, attractions, retail) has independent quality flags, allowing partial index calculation when some categories meet thresholds while others don't.
 
@@ -102,47 +102,48 @@ States are evaluated using statistical sample size requirements to ensure reliab
 
 
 
-1. SQL query to extract monthly state transaction data by month with SQL-based outlier removal (P5/P98)
-2. Python-based basket multiplication and statistical aggregation
-3. Calculate basket components per month for state-level indices (national, regional, county, and city-level in future phases)
+1. SQL query to extract monthly national, region and state transaction data by month
+2. Python-based outlier removal and statistical calculations
+3. Calculate basket components per month for national, regional and state-level indices.
 4. Apply data quality thresholds
 5. Write results to output table in BigQuery
 
 ### Output Table Schema
 
-**Granularity**: State-level - One row per state per month (Phase 1)
+**Granularity**: Multiple datbles One row per county per month
 
-**Primary Key**: State Abbreviation + Month date
+**Primary Key**: State Abbreviation, Region Name + Month date
 
-**Columns** (Phase 1 - State Level):
+**Columns**:
 
-* `merch_state` (string): State abbreviation (e.g., 'CA', 'TX', 'FL')
-* `month_date` (date): YYYY-MM-DD format (e.g., 2024-07-01)
-* `accommodation_cost` (float): Median per-transaction accommodations cost
-* `breakfast_lunch_cost` (float): P35 per-transaction cost (to be multiplied by 4 in Python)
-* `dinner_cost` (float): P65 per-transaction cost (to be multiplied by 2 in Python)
-* `attraction_cost` (float): Median per-transaction cost (to be multiplied by 2 in Python)
-* `retail_cost` (float): Median per-transaction cost (to be multiplied by 1 in Python)
-* `median_meal_cost` (float): P50 per-transaction restaurant cost (reference)
-* `transaction_count` (integer): Total transactions in category (after outlier removal)
-* `unique_visitors` (integer): Count of distinct cardholders (membccid)
-* `data_quality_flag` (string): Quality assessment - 'EXCLUDE', 'ROLLING_3MO', or 'SINGLE_MONTH'
-* `period_start` (date): Start of date range used for calculation
-* `period_end` (date): End of date range used for calculation
-* `calculation_timestamp` (timestamp): When calculation was performed
-
-**Note**: Basket multiplication (e.g., 4 breakfast/lunch meals, 2 dinners, 2 attraction days, 1 retail day) will be performed in Python after SQL extraction.
+* `county_fips` (string): County FIPS code identifier (joins to county names table)
+* `month_date` (date): YYYY-MM-DD format (e.g., 2024-01-01)
+* `lodging_cost` (float): Median accommodations cost
+* `breakfast_lunch_cost` (float): Cost for 4 meals at P35
+* `dinner_cost` (float): Cost for 2 meals at P65
+* `attraction_cost` (float): Cost for 2 days
+* `retail_cost` (float): Cost for 1 day
+* `total_basket_cost` (float): Sum of all component costs
+* `lodging_txn_count` (integer): Number of lodging transactions (after outlier removal)
+* `restaurant_txn_count` (integer): Number of restaurant transactions (after outlier removal)
+* `attraction_txn_count` (integer): Number of attraction transactions (after outlier removal)
+* `retail_txn_count` (integer): Number of retail transactions (after outlier removal)
+* `lodging_txn_removed` (integer): Number of lodging transactions removed as outliers
+* `restaurant_txn_removed` (integer): Number of restaurant transactions removed as outliers
+* `attraction_txn_removed` (integer): Number of attraction transactions removed as outliers
+* `retail_txn_removed` (integer): Number of retail transactions removed as outliers
+* `hotel_property_count` (integer): Number of hotel properties reporting
+* `meets_threshold` (boolean): Whether county meets minimum data quality thresholds
+* `created_at` (timestamp): Record creation timestamp
 
 **Index Format**: Raw dollar amounts (baseline indexing and year-over-year comparisons out of scope for initial version)
 
 
 ## **Output & Usage**
 
-**Phase 1**: Produce a monthly Cost of Travel Index for each state in the United States that has sufficient data to meet quality thresholds.
+Produce a monthly Cost of Travel Index for each county in the United States that has sufficient data to meet quality thresholds. (City and State as fast-follow options)
 
-**Future Phases**: County and city-level indices, followed by regional and national aggregations.
-
-This data tracks changes in travel costs over time and enables comparison across geographies.
+This data can then be aggregated at the state, region, and national level by month to track changes in the travel industry over time.
 
 
 **Out of Scope for V0.1.0**:
@@ -157,8 +158,8 @@ This data tracks changes in travel costs over time and enables comparison across
 
 Notes
 
-* DE meals are lower than expected. Katie Stadius flagged that they are reviewing the Delaware spend data. 
-* There is variance between the accommodations calculated by this script and the values from KeyData. More discovery helpful to determine which to use long-term. 
+* DE meals are lower than expected. Katie Stadius flagged that they are reviewing the Delaware spend data.
+* There is variance between the accommodations calculated by this script and the values from KeyData. More discovery helpful to determine which to use long-term.
 
 
 
