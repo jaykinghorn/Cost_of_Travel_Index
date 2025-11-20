@@ -78,3 +78,4 @@ Table URI: `prj-sandbox-i7sk.jk_testing.us_census_region_divisions_bridge_table`
 | census_region_division | STRING |
 
 
+
