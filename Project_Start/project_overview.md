@@ -158,8 +158,8 @@ This data can then be aggregated at the state, region, and national level by mon
 
 Notes
 
-* DE meals are lower than expected. Katie Stadius flagged that they are reviewing the Delaware spend data.
-* There is variance between the accommodations calculated by this script and the values from KeyData. More discovery helpful to determine which to use long-term.
+* Delaware meals are lower than expected. Katie Stadius flagged that they are reviewing the Delaware spend data.
+* There is variance between the accommodations calculated by this script and the values from KeyData. Use Spending accommodations for now. Additional discovery later will be helpful to determine which to use long-term.
 
 
 
