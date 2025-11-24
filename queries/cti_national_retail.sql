@@ -41,7 +41,7 @@ WITH retail_transactions AS (
     t.membccid
   FROM `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.transaction_tourism` t
   JOIN `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.merchant_tourism` m
-    ON t.mtid = m.mtid
+    ON t.mtid = m.mtid and t.ref_date = m.ref_date
   WHERE t.trans_date BETWEEN start_date AND end_date
     AND t.trans_distance > distance_threshold
     AND m.merch_type = 0  -- Physical locations only

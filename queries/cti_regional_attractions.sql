@@ -36,7 +36,7 @@ WITH attraction_transactions AS (
     t.membccid
   FROM `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.transaction_tourism` t
   JOIN `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.merchant_tourism` m
-    ON t.mtid = m.mtid
+    ON t.mtid = m.mtid and t.ref_date = m.ref_date
   JOIN `prj-sandbox-i7sk.jk_testing.us_census_region_divisions_bridge_table` r
     ON m.merch_state = r.abbreviation
   WHERE t.trans_date BETWEEN start_date AND end_date
