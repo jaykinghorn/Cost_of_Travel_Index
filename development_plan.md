@@ -52,7 +52,11 @@ This development plan outlines the implementation strategy for building the Cost
   * `low_price_meals` (int): Default 4 (breakfast & lunch)
   * `high_price_meals` (int): Default 2 (dinner)
   * `attraction_days` (int): Default 2
-  * `retail_days` (int): Default 1
+  * `retail_days` (int): Default 2
+* **Retail Transaction Cap** (TEST BRANCH):
+  * `max_retail_txn_per_cardholder_per_day` (int): Default 6
+  * Prevents inflated medians from high-frequency shoppers
+  * Keeps highest-value transactions when capping
 * **Quality Thresholds** (initial estimates, to be refined in Phase 4):
   * `min_lodging_transactions` (int): Default 30
   * `min_restaurant_transactions` (int): Default 50
@@ -321,26 +325,79 @@ attraction_stats['attraction_cost'] = attraction_stats['median'] * config['attra
 
 ### 3.4 Retail Calculations
 
-**Task**: Calculate retail costs per county
+**Task**: Calculate retail costs per county with daily transaction cap
+
+**TEST BRANCH NOTE**: This section implements a modified approach to prevent inflated retail medians caused by high-frequency shoppers making many small purchases per day.
 
 * Input: Filtered retail transactions
+* **NEW**: Cap at maximum 6 transactions per cardholder (membccid) per day
+  - Keeps highest-value transactions when capping
+  - Prevents "spree shoppers" from skewing median upward
 * Group by county_fips
 * Calculate median daily retail spending
-* Multiply by basket quantity (default 1 day)
-* Track transaction counts per county
+* Multiply by basket quantity (default 2 days)
+* Track transaction counts per county (before and after capping)
 
 **Pandas Operations**:
 
 ```python
-retail_df = filtered_df[filtered_df['category'] == 'retail']
-retail_stats = retail_df.groupby('county_fips')['trans_amount'].agg([
+retail_df = filtered_df[filtered_df['category'] == 'retail'].copy()
+
+# Cap at max 6 retail transactions per cardholder per day
+# Sort by amount descending to keep highest-value purchases
+retail_capped = (
+    retail_df
+    .sort_values('trans_amount', ascending=False)
+    .groupby(['membccid', 'trans_date'])
+    .head(config['max_retail_txn_per_cardholder_per_day'])  # default 6
+    .reset_index(drop=True)
+)
+
+# Track capping impact
+txn_before_cap = len(retail_df)
+txn_after_cap = len(retail_capped)
+txn_capped = txn_before_cap - txn_after_cap
+
+# Calculate median from capped transactions
+retail_stats = retail_capped.groupby('county_fips')['trans_amount'].agg([
     ('median', 'median'),
     ('txn_count', 'count')
 ])
+retail_stats['txn_capped'] = txn_capped  # Track for validation
 retail_stats['retail_cost'] = retail_stats['median'] * config['retail_days']
 ```
 
-**Deliverable**: DataFrame with county-level retail costs
+**SQL Alternative** (apply cap in query):
+
+```sql
+WITH retail_transactions_ranked AS (
+  SELECT
+    geo.admin2_id as county_fips,
+    t.trans_amount,
+    t.trans_date,
+    t.txid,
+    t.membccid,
+    ROW_NUMBER() OVER (
+      PARTITION BY t.membccid, t.trans_date
+      ORDER BY t.trans_amount DESC
+    ) as daily_rank
+  FROM transaction_tourism t
+  JOIN merchant_tourism m ON t.mtid = m.mtid
+  JOIN admin_geo_reference geo ON m.merch_city = geo.admin2_id
+  WHERE m.mcc IN (...retail MCCs...)
+    AND t.trans_date BETWEEN @month_start AND @month_end
+    AND t.trans_distance > 60
+)
+SELECT * FROM retail_transactions_ranked
+WHERE daily_rank <= 6  -- Cap at 6 transactions per cardholder per day
+```
+
+**Configuration Parameter**:
+- `max_retail_txn_per_cardholder_per_day` (int): Default 6
+  - Rationale: Reasonable upper bound for distinct retail purchases in a day
+  - Alternative values to test: 4, 8, 10
+
+**Deliverable**: DataFrame with county-level retail costs and capping statistics
 
 ### 3.5 Lodging Calculations
 
