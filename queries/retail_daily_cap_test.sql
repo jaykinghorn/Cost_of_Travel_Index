@@ -15,8 +15,8 @@ DECLARE outlier_upper_percentile FLOAT64 DEFAULT 0.98;  -- P98
 -- Step 1: Extract and rank retail transactions (STATE-LEVEL)
 WITH retail_transactions_raw AS (
   SELECT
-    geo.admin1_abbr AS state_abbr,
-    geo.admin1 AS state_name,
+    m.merch_state AS state_abbr,
+    m.merch_state AS state_name,
     t.trans_amount,
     t.trans_date,
     t.txid,
@@ -29,12 +29,10 @@ WITH retail_transactions_raw AS (
   FROM `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.transaction_tourism` t
   JOIN `prj-prod-codecs-spend-b3c4.Spend_CODEC_Enrichment.merchant_tourism` m
     ON t.mtid = m.mtid
-  JOIN `data-reference.Geo_Reference.admin_geo_reference` geo
-    ON m.merch_city = geo.admin2_id
   WHERE t.trans_date BETWEEN month_start AND month_end
     AND t.trans_distance > distance_threshold
     AND m.merch_type = 0  -- Physical locations only
-    AND geo.country = 'United States'
+    AND m.merch_country = 'US'
     -- Retail MCC codes (38 codes)
     AND m.mcc IN (
       '5971', '5977', '7230', '5942', '5994', '5611', '5621', '5631',
