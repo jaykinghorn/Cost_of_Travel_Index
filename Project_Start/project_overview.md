@@ -27,6 +27,7 @@ The index represents a hypothetical three-day weekend experienced by a couple tr
 
 
 
+
 1. **Lodging**: median monthly transaction value at Hotels, Casino hotels, Bed and Breakfasts and other accommodations.
 2. **Restaurant Meals**: 6 total meals
    * 4 meals at 35th percentile price (breakfast and lunch - typically cheaper)
@@ -102,6 +103,7 @@ States are evaluated using statistical sample size requirements to ensure reliab
 
 
 
+
 1. SQL query to extract monthly national, region and state transaction data by month
 2. Python-based outlier removal and statistical calculations
 3. Calculate basket components per month for national, regional and state-level indices.
@@ -160,6 +162,7 @@ Notes
 
 * Delaware meals are lower than expected. Katie Stadius flagged that they are reviewing the Delaware spend data.
 * There is variance between the accommodations calculated by this script and the values from KeyData. Use Spending accommodations for now. Additional discovery later will be helpful to determine which to use long-term.
+* Maryland retail is significantly lower than the other states \~$10 compared to $30
 
 
 
