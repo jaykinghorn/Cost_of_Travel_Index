@@ -41,7 +41,7 @@ The index represents a hypothetical three-day weekend experienced by a couple tr
 
 **Transaction Analysis Approach**:
 
-* **No Aggregation**: Individual transactions analyzed directly for restaurants, attractions, and retail
+* Where multiple purchases per day are are commonplace (attractions, retail) the transactions are grouped by memberccid per day and capped at a maximum of 10 transactions per day. Cardholders with more than 10 transactions/day are excluded from the calculations. 
 * **Accommodations**: Individual transactions with $50 minimum threshold to filter incidental charges (parking fees, minibar, etc.)
 * **Visitor Classification**: Transactions where distance from home > 60 miles
 * **Physical Locations Only**: Online/e-commerce transactions excluded (merch_type = 0)
