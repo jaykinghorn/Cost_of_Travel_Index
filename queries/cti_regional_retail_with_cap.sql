@@ -42,7 +42,7 @@ DECLARE min_sample_rolling INT64 DEFAULT 2000; -- Use 3-month rolling if below t
 WITH retail_transactions_raw AS (
   -- Extract all retail transactions with daily ranking
   SELECT
-    r.census_region_division,
+    `census_region_division ` as census_region_division,--note the extra whitespace on the column name. Fix later,
     DATE_TRUNC(t.trans_date, MONTH) as month_date,
     t.trans_date,
     t.trans_amount,
